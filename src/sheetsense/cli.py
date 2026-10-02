@@ -35,9 +35,13 @@ def table(result: guard.Result, limit: int = 50) -> str:
         return "  ".join(c.rjust(w) if n else c.ljust(w) for c, w, n in zip(cells, widths, numeric)).rstrip()
 
     out = [line(result.columns), "  ".join("─" * w for w in widths)] + [line(r) for r in rows]
+    if not rows:
+        out.append("(no rows)")
     more = len(result.rows) - limit
-    if more > 0 or result.cut:
-        out.append(f"… {'more' if result.cut else more} more rows")
+    if result.cut:
+        out.append(f"... more than {len(result.rows)} rows; showing the first {min(limit, len(result.rows))}")
+    elif more > 0:
+        out.append(f"... and {more} more rows")
     return "\n".join(out)
 
 
@@ -73,8 +77,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     db = open_db()
 
     if args.command == "describe":
-        print(describe(load(db, files(args.files))))
-        return 0
+        tables = load(db, files(args.files))
+        print(describe(tables) if tables else "No sheet has a row of headings over its data.")
+        return 0 if tables else 1
 
     if len(args.files) < 2:
         parser.error("give at least one file and then the question or SQL")
