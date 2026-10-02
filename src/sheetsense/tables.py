@@ -213,4 +213,5 @@ def describe(tables: Sequence[Table]) -> str:
 
 
 def open_db() -> sqlite3.Connection:
-    return sqlite3.connect(":memory:")
+    # Used by one caller at a time, but not always from the thread that opened it (the web demo).
+    return sqlite3.connect(":memory:", check_same_thread=False)

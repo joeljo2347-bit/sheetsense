@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sheetsense: ask your spreadsheets</title>
+<meta name="description" content="Ask a spreadsheet a question in plain English and get an exact answer. A local model writes the SQL; SQLite does the math.">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #14171c; --muted: #5d6673; --line: #e3e6eb;
+    --accent: #2457d6; --accent-ink: #ffffff; --soft: #eef2fb; --good: #127a4a; --bad: #b42318; --code: #f3f4f7;
+    --radius: 12px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1216; --card: #171b21; --ink: #e8ebf0; --muted: #9aa4b2; --line: #2a313b;
+            --accent: #6c93ff; --accent-ink: #0b0e12; --soft: #1d2533; --good: #4cc38a; --bad: #ff7b72; --code: #11151b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header, main, footer { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+  header { padding-top: 40px; padding-bottom: 8px; }
+  .brand { font-weight: 700; font-size: 26px; letter-spacing: -0.02em; margin: 0; }
+  .brand span { color: var(--accent); }
+  .tagline { color: var(--muted); margin: 4px 0 0; font-size: 17px; }
+  main { display: grid; grid-template-columns: 360px 1fr; gap: 20px; padding-top: 24px; padding-bottom: 24px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; min-width: 0; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
+  .file { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+  .file:first-of-type { border-top: 0; padding-top: 0; }
+  .file input { margin-top: 4px; accent-color: var(--accent); }
+  .file b { display: block; font-weight: 600; }
+  .file small { color: var(--muted); display: block; }
+  .file a { color: var(--accent); font-size: 13px; text-decoration: none; }
+  .drop { display: block; margin-top: 14px; border: 1.5px dashed var(--line); border-radius: 10px; padding: 16px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.on { border-color: var(--accent); background: var(--soft); }
+  .drop input { display: none; }
+  .chosen { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { background: var(--soft); border-radius: 999px; padding: 3px 10px; font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+  .tag button { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 14px; }
+  .tables { margin-top: 16px; font-size: 13px; color: var(--muted); }
+  .tables div { margin-top: 6px; }
+  .tables code { color: var(--ink); font-family: var(--mono); font-size: 12.5px; }
+  form { display: flex; gap: 10px; }
+  #q { flex: 1; min-width: 0; font: inherit; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); }
+  #q:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  button.go { font: inherit; font-weight: 600; padding: 0 20px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+  button.go:disabled { opacity: 0.55; cursor: default; }
+  .ideas { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+  .ideas button { font: inherit; font-size: 13.5px; border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .ideas button:hover { border-color: var(--accent); color: var(--accent); }
+  #out { margin-top: 18px; }
+  .status { color: var(--muted); display: flex; align-items: center; gap: 10px; padding: 14px 0; }
+  .spin { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { color: var(--bad); padding: 12px 0; }
+  .answer h3 { margin: 0 0 10px; font-size: 16px; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { padding: 8px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--soft); }
+  tr:last-child td { border-bottom: 0; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .meta .ok { color: var(--good); }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--accent); font-size: 14px; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; font: 13px/1.5 var(--mono); white-space: pre-wrap; }
+  .how { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  @media (max-width: 860px) { .how { grid-template-columns: 1fr; } }
+  .how p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .how b { font-size: 15px; }
+  footer { color: var(--muted); font-size: 13px; padding-bottom: 40px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">sheet<span>sense</span></h1>
+  <p class="tagline">Ask a spreadsheet a question in plain English. Get an exact answer.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="data-h">
+    <h2 id="data-h">Data</h2>
+    <div id="files"></div>
+    <label class="drop" id="drop">
+      <input type="file" id="upload" accept=".xlsx,.csv" multiple>
+      <span>Or drop your own <b>.xlsx</b> or <b>.csv</b> here (up to 3 files, 2 MB each)</span>
+    </label>
+    <div class="chosen" id="chosen"></div>
+    <div class="tables" id="tables"></div>
+  </section>
+
+  <section class="card" aria-labelledby="ask-h">
+    <h2 id="ask-h">Ask</h2>
+    <form id="ask">
+      <input id="q" maxlength="300" autocomplete="off" placeholder="e.g. Which region sold the most in Q3?" aria-label="Your question">
+      <button class="go" id="go" type="submit">Ask</button>
+    </form>
+    <div class="ideas" id="ideas"></div>
+    <div id="out" aria-live="polite"></div>
+  </section>
+
+  <section class="card how" aria-label="How it works">
+    <div><b>1. Your sheet becomes tables</b><p>Titles above the headings, money typed as text and Total rows are cleaned up, so every column has a proper type.</p></div>
+    <div><b>2. A model writes one query</b><p>An open model running on this server reads your question and the column names, and writes a single read-only SQL query.</p></div>
+    <div><b>3. The database does the math</b><p>SQLite computes every figure, so totals are exact. Mistakes are sent back to the model to fix, and you see the query it used.</p></div>
+  </section>
+</main>
+
+<footer>
+  Files you upload are read in memory for your question and then discarded. Nothing is sent to an outside AI service.
+  The example company and its data are made up. <span id="model"></span>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const uploads = [];
+let busy = false;
+
+const fmt = (v) => {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "number") {
+    return Number.isInteger(v) ? (Math.abs(v) >= 10000 ? v.toLocaleString("en-US") : String(v))
+                               : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return String(v);
+};
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function showTables(tables) {
+  $("tables").innerHTML = tables.length ? "Tables: " + tables.map((t) =>
+    `<div><code>${esc(t.name)}</code> ${t.rows} rows · ${t.columns.map(esc).join(", ")}</div>`).join("") : "";
+}
+
+function showChosen() {
+  $("chosen").innerHTML = uploads.map((f, i) =>
+    `<span class="tag">${esc(f.name)}<button type="button" aria-label="Remove ${esc(f.name)}" data-i="${i}">×</button></span>`).join("");
+}
+
+function addFiles(list) {
+  for (const f of list) {
+    if (!/\.(xlsx|csv)$/i.test(f.name)) { status(`${f.name}: only .xlsx and .csv files can be read.`, true); continue; }
+    if (f.size > 2000000) { status(`${f.name} is over 2 MB.`, true); continue; }
+    if (uploads.length < 3) uploads.push(f);
+  }
+  showChosen();
+}
+
+function status(text, error) {
+  $("out").innerHTML = error ? `<div class="error">${esc(text)}</div>` : `<div class="status"><div class="spin"></div>${esc(text)}</div>`;
+}
+
+function render(r) {
+  const numeric = r.columns.map((_, i) => r.rows.every((row) => row[i] === null || typeof row[i] === "number"));
+  const head = r.columns.map((c, i) => `<th class="${numeric[i] ? "n" : ""}">${esc(c)}</th>`).join("");
+  const body = r.rows.length ? r.rows.map((row) => "<tr>" + row.map((v, i) => `<td class="${numeric[i] ? "n" : ""}">${esc(fmt(v))}</td>`).join("") + "</tr>").join("")
+                             : `<tr><td colspan="${r.columns.length || 1}">No rows matched.</td></tr>`;
+  const more = r.cut ? `<div class="meta">Showing the first ${r.rows.length} rows.</div>` : "";
+  const retry = r.retries ? ` · fixed after ${r.retries} retr${r.retries === 1 ? "y" : "ies"}` : "";
+  $("out").innerHTML = `
+    <div class="answer">
+      ${r.note ? `<h3>${esc(r.note.replace(/\.?$/, "."))}</h3>` : ""}
+      <div class="scroll"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+      ${more}
+      <div class="meta"><span class="ok">●</span> Computed by SQLite in ${r.seconds} s${retry}</div>
+      <details><summary>The query it used</summary><pre>${esc(r.sql)}</pre></details>
+    </div>`;
+  showTables(r.tables);
+}
+
+async function ask(question) {
+  if (busy) return;
+  const examples = [...document.querySelectorAll("#files input:checked")].map((c) => c.value);
+  if (!examples.length && !uploads.length) { status("Pick an example file or upload a spreadsheet.", true); return; }
+  busy = true; $("go").disabled = true;
+  status("Writing the query and running it...");
+  const body = new FormData();
+  body.append("question", question);
+  body.append("examples", examples.join(","));
+  uploads.forEach((f) => body.append("files", f));
+  try {
+    const res = await fetch("/api/ask", { method: "POST", body });
+    const data = await res.json().catch(() => ({ error: "The server sent an unexpected reply." }));
+    if (!res.ok || data.error) status(data.error || `Something went wrong (${res.status}).`, true);
+    else render(data);
+  } catch {
+    status("Couldn't reach the demo. Check your connection and try again.", true);
+  } finally {
+    busy = false; $("go").disabled = false;
+  }
+}
+
+$("ask").addEventListener("submit", (e) => { e.preventDefault(); const q = $("q").value.trim(); if (q) ask(q); });
+$("upload").addEventListener("change", (e) => { addFiles(e.target.files); e.target.value = ""; });
+$("chosen").addEventListener("click", (e) => { const i = e.target.dataset.i; if (i !== undefined) { uploads.splice(+i, 1); showChosen(); } });
+const drop = $("drop");
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("on"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("on"); }));
+drop.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
+
+fetch("/api/examples").then((r) => r.json()).then((d) => {
+  $("files").innerHTML = d.files.map((f) => `
+    <label class="file"><input type="checkbox" value="${esc(f.name)}" checked>
+      <span><b>${esc(f.name)}</b><small>${esc(f.about)}</small><a href="/examples/${encodeURIComponent(f.name)}" download>Download to look inside</a></span>
+    </label>`).join("");
+  $("ideas").innerHTML = d.suggestions.map((s) => `<button type="button">${esc(s)}</button>`).join("");
+  $("ideas").addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") { $("q").value = e.target.textContent; ask(e.target.textContent); } });
+  showTables(d.tables);
+}).catch(() => status("Couldn't load the examples. Refresh the page to try again.", true));
+</script>
+</body>
+</html>

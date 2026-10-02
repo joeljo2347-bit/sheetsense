@@ -84,6 +84,20 @@ sheetsense sql sales.xlsx "SELECT region, SUM(amount) FROM sales GROUP BY region
 
 `--model` picks another Ollama model (or set `SHEETSENSE_MODEL`); `--quiet` prints only the answer.
 
+## Web demo
+
+The same thing in a browser: pick the example files or upload your own, ask, and see the answer
+with the query behind it.
+
+```bash
+pip install -e ".[web]"
+uvicorn sheetsense.web:app --port 8000      # then open http://localhost:8000
+```
+
+It's built to be put online: uploads are size-checked and read in memory, then discarded; one
+question runs on the model at a time; each visitor gets 15 questions per 10 minutes. `deploy/setup.sh`
+sets it up on an Ubuntu server with Ollama, a systemd service and HTTPS through Caddy.
+
 ## Accuracy
 
 `scripts/accuracy.py` asks eight questions about the example files and compares each answer with a
