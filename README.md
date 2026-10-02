@@ -25,19 +25,16 @@ Oakhaven Vet
 
 ## Why
 
-Language models are good at understanding a question and bad at arithmetic. Paste a few hundred
-rows into a chatbot and ask for a total, and you'll get a confident number that's a little off,
-or a list of names with one missing. For a sales report or a reconciliation, a little off is wrong.
+Language models understand questions well and do arithmetic badly. Paste a few hundred rows into
+a chatbot, ask for a total, and you get a confident number that's a little off, or a list of names
+with one missing. For a sales report or a reconciliation, a little off is wrong.
 
-sheetsense splits the work:
+So sheetsense never asks the model for a number. The model reads the question and the column
+names and writes one SQL query; SQLite runs it and returns the figures. If the query fails, or
+makes a mistake sheetsense knows to look for, it goes back to the model with the reason, up to
+three times. The SQL is printed with every answer so you can check it.
 
-- **The model only writes the query.** It sees the tables' columns, never asked to add anything up.
-- **SQLite computes every figure.** Sums, counts, averages and "in this list but not that one" come
-  from the database, so they're exact.
-- **Mistakes go back to the model, not to you.** A query that fails, or one that would give a
-  wrong answer, is sent back with the reason, and the model fixes it (up to three tries).
-- **Nothing leaves your computer.** It runs on a local model through [Ollama](https://ollama.com).
-  No API keys, no uploads.
+Everything runs on your machine through [Ollama](https://ollama.com): no API keys, nothing uploaded.
 
 ```mermaid
 flowchart LR
@@ -94,8 +91,8 @@ hand-written query: totals, filters, month-by-month, top-N, a join across files,
 
 | Model | Correct | Time per question |
 | --- | --- | --- |
-| gpt-oss:20b | 24/24 | 3.0 s |
-| qwen3:8b | 23/24 | 14.2 s |
+| gpt-oss:20b | 24/24 | 2.9 s |
+| qwen3:8b | 22/24 | 17.4 s |
 
 Three runs of each question, on an Apple M5 Pro. Eight questions on two files is a small test;
 it shows the approach works, not that it never fails. The SQL is always printed so you can check it.
@@ -125,6 +122,8 @@ src/sheetsense/
   of the last three, then explain") work only when they fit in one SELECT.
 - The example data is made up. Your sheets will have surprises; `describe` shows how they loaded.
 - Up to 500 result rows are returned per question.
+- Numbers written the European way (`1 200,50`) are read as text.
+- Old `.xls` files aren't supported; save them as `.xlsx` first.
 
 ## License
 

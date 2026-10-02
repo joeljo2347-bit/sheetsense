@@ -67,8 +67,9 @@ def main() -> int:
             try:
                 got = ask(question, db, tables, model).result.rows
                 ok = matches(expected, got)
-            except CouldNotAnswer:
+            except (CouldNotAnswer, ConnectionError) as e:
                 ok = False
+                print(f"      {e}")
             passed += ok
             print(f"{'PASS' if ok else 'FAIL'}  {question}")
     print(f"\n{passed}/{total} correct with {args.model}, {(time.monotonic() - started) / total:.1f} s a question")

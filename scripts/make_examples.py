@@ -48,9 +48,10 @@ def orders() -> list[list]:
 
 def write_orders(rows: list[list]) -> None:
     book = Workbook()
+    book.properties.creator = "Joel Jo"
     sheet = book.active
     sheet.title = "Orders"
-    sheet.append(["Lumen Supply Co. — Orders 2025"])
+    sheet.append(["Lumen Supply Co. Orders 2025"])
     sheet["A1"].font = Font(bold=True, size=14)
     sheet.append([])
     sheet.append(["Date", "Order", "Customer", "Region", "Rep", "Product", "Qty", "Amount", "Status"])
