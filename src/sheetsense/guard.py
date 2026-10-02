@@ -18,10 +18,11 @@ TEXT_SURGERY = re.compile(r"\b(substr|substring|ltrim|rtrim|trim)\s*\(\s*(?:\w+\
 
 
 def refuse(sql: str) -> Optional[str]:
-    """Why this SQL may not run, or None. One SELECT (or WITH … SELECT), nothing that writes."""
+    """Why this SQL may not run, or None. One SELECT (or WITH ... SELECT), nothing that writes."""
     s = re.sub(r"--[^\n]*|/\*.*?\*/", " ", sql, flags=re.DOTALL).strip().rstrip(";").strip()
+    s = re.sub(r"'(?:[^']|'')*'", "''", s)  # text in quotes ('a;b', 'delete me') is data, not SQL
     if not re.match(r"^(select|with)\b", s, re.IGNORECASE):
-        return "Only a SELECT query (or WITH … SELECT) can run."
+        return "Only a SELECT query (or WITH ... SELECT) can run."
     if ";" in s:
         return "One query at a time."
     if WRITES.search(s):

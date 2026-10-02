@@ -38,7 +38,7 @@ class Table:
 
 
 def snake(text: str) -> str:
-    out = re.sub(r"[^0-9a-zA-Z]+", "_", str(text).strip().lower()).strip("_")
+    out = re.sub(r"\W+", "_", str(text).strip().lower()).strip("_")
     return out or "column"
 
 
@@ -103,9 +103,16 @@ def is_total_row(row: list) -> bool:
     return isinstance(first, str) and first.strip().lower().rstrip(":") in TOTAL_WORDS
 
 
+def is_code(value) -> bool:
+    """Digits with a leading zero ("02134", "007") are a code, not a number: the zero matters."""
+    return isinstance(value, str) and len(value.strip()) > 1 and value.strip().isdigit() and value.strip().startswith("0")
+
+
 def kind_of(values: List) -> str:
     present = [v for v in values if v not in (None, "")]
     if not present:
+        return "text"
+    if any(is_code(v) for v in present):
         return "text"
     if all(as_number(v) is not None for v in present):
         return "number"
