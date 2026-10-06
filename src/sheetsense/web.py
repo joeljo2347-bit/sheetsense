@@ -143,14 +143,38 @@ async def api_ask(
     examples: str = Form(""),
     files: List[UploadFile] = File(default=[]),
 ):
-    global waiting
     question = question.strip()
+    files = [f for f in files if f.filename]
+    chosen = [n for n in examples.split(",") if n in EXAMPLE_FILES]
+    refused = _refuse_request(request, question, files, chosen)
+    if refused:
+        return refused
+    with tempfile.TemporaryDirectory(prefix="sheetsense-") as tmp:
+        paths = await _save_uploads(files, Path(tmp))
+        if isinstance(paths, JSONResponse):
+            return paths
+        db = open_db()
+        try:
+            tables = load(db, [EXAMPLES / n for n in chosen] + paths)
+        except Exception:  # a broken or unusual file: say so rather than fail the page
+            db.close()
+            return fail(400, "Couldn't read that file. Is it a normal .xlsx or .csv export?")
+        if not tables:
+            db.close()
+            return fail(400, "No sheet has a row of headings over its data.")
+        started = time.monotonic()
+        answer = await _ask_in_turn(question, db, tables)
+    if isinstance(answer, JSONResponse):
+        return answer
+    return _payload(answer, tables, time.monotonic() - started)
+
+
+def _refuse_request(request: Request, question: str, files, chosen) -> Optional[JSONResponse]:
+    """Everything that can be refused before reading a file or touching the model."""
     if not question:
         return fail(400, "Type a question first.")
     if len(question) > MAX_QUESTION:
         return fail(400, f"Keep the question under {MAX_QUESTION} characters.")
-    files = [f for f in files if f.filename]
-    chosen = [n for n in examples.split(",") if n in EXAMPLE_FILES]
     if not files and not chosen:
         return fail(400, "Pick an example file or upload a spreadsheet.")
     if len(files) > MAX_FILES:
@@ -160,39 +184,42 @@ async def api_ask(
         return fail(429, f"That's the limit for now. Try again in about {max(1, wait // 60)} minute(s).")
     if waiting >= MAX_WAITING:
         return fail(503, "The demo is busy answering other people. Try again in a minute.")
+    return None
 
-    with tempfile.TemporaryDirectory(prefix="sheetsense-") as tmp:
-        paths = [EXAMPLES / n for n in chosen]
-        for f in files:
-            data = await f.read(MAX_BYTES + 1)
-            problem = check_upload(f.filename, data)
-            if problem:
-                return fail(400, problem)
-            path = Path(tmp) / Path(f.filename).name
-            path.write_bytes(data)
-            paths.append(path)
-        db = open_db()
-        try:
-            tables = load(db, paths)
-        except Exception:  # a broken or unusual file: say so rather than fail the page
-            return fail(400, "Couldn't read that file. Is it a normal .xlsx or .csv export?")
-        if not tables:
-            return fail(400, "No sheet has a row of headings over its data.")
 
-        waiting += 1
-        started = time.monotonic()
-        try:
-            async with turn:  # one question on the model at a time: it's a single CPU-bound model
-                loop = asyncio.get_running_loop()
-                answer = await loop.run_in_executor(None, ask, question, db, tables, model)
-        except CouldNotAnswer as e:
-            return fail(422, "The model couldn't write a working query for that. Try rephrasing it.", attempts=e.attempts)
-        except ConnectionError:
-            return fail(503, "The model isn't available right now. Try again in a minute.")
-        finally:
-            waiting -= 1
-            db.close()
+async def _save_uploads(files, folder: Path):
+    """Check each upload and write it to the temporary folder; a refusal on the first bad one."""
+    paths = []
+    for i, f in enumerate(files):
+        data = await f.read(MAX_BYTES + 1)
+        problem = check_upload(f.filename, data)
+        if problem:
+            return fail(400, problem)
+        path = folder / str(i) / Path(f.filename).name  # own folder: two uploads may share a name
+        path.parent.mkdir()
+        path.write_bytes(data)
+        paths.append(path)
+    return paths
 
+
+async def _ask_in_turn(question: str, db, tables):
+    """Ask the model, one question at a time (it's a single CPU-bound model); always closes db."""
+    global waiting
+    waiting += 1
+    try:
+        async with turn:
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, ask, question, db, tables, model)
+    except CouldNotAnswer as e:
+        return fail(422, "The model couldn't write a working query for that. Try rephrasing it.", attempts=e.attempts)
+    except ConnectionError:
+        return fail(503, "The model isn't available right now. Try again in a minute.")
+    finally:
+        waiting -= 1
+        db.close()
+
+
+def _payload(answer, tables, seconds: float) -> dict:
     result: guard.Result = answer.result
     return {
         "sql": answer.sql,
@@ -202,7 +229,7 @@ async def api_ask(
         "total_rows": len(result.rows),
         "cut": result.cut or len(result.rows) > SHOWN_ROWS,
         "retries": len(answer.attempts),
-        "seconds": round(time.monotonic() - started, 1),
+        "seconds": round(seconds, 1),
         "tables": summary(tables),
         "schema": describe(tables),
     }

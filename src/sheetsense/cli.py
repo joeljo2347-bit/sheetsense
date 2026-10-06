@@ -57,7 +57,7 @@ def files(paths: List[str]) -> List[Path]:
     return found
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sheetsense", description="Ask your spreadsheets questions; get exact answers.")
     parser.add_argument("--version", action="version", version=f"sheetsense {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -72,39 +72,47 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     p_sql = sub.add_parser("sql", help="run your own SELECT")
     p_sql.add_argument("files", nargs="+", help="spreadsheets, then the SQL last")
+    return parser
 
+
+def _run_sql(db, text: str, tables) -> int:
+    why = guard.refuse(text) or guard.misread(text, tables)
+    if why:
+        sys.exit(f"sheetsense: {why}")
+    print(table(guard.run(db, text)))
+    return 0
+
+
+def _run_ask(db, text: str, tables, model: str, quiet: bool) -> int:
+    try:
+        answer = ask(text, db, tables, Ollama(model))
+    except (ConnectionError, CouldNotAnswer) as e:
+        sys.exit(f"sheetsense: {e}")
+    if not quiet:
+        print(f"\033[2m{answer.sql}\033[0m\n" if sys.stdout.isatty() else f"{answer.sql}\n")
+    print(table(answer.result))
+    if answer.note and not quiet:
+        print(f"\n{answer.note}")
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = _parser()
     args = parser.parse_args(argv)
     db = open_db()
-
     if args.command == "describe":
         tables = load(db, files(args.files))
         print(describe(tables) if tables else "No sheet has a row of headings over its data.")
         return 0 if tables else 1
-
     if len(args.files) < 2:
         parser.error("give at least one file and then the question or SQL")
     *paths, text = args.files
     tables = load(db, files(paths))
     if not tables:
         sys.exit("sheetsense: no sheet has a row of headings over its data")
-
     if args.command == "sql":
-        why = guard.refuse(text) or guard.misread(text, tables)
-        if why:
-            sys.exit(f"sheetsense: {why}")
-        print(table(guard.run(db, text)))
-        return 0
-
-    try:
-        answer = ask(text, db, tables, Ollama(args.model))
-    except (ConnectionError, CouldNotAnswer) as e:
-        sys.exit(f"sheetsense: {e}")
-    if not args.quiet:
-        print(f"\033[2m{answer.sql}\033[0m\n" if sys.stdout.isatty() else f"{answer.sql}\n")
-    print(table(answer.result))
-    if answer.note and not args.quiet:
-        print(f"\n{answer.note}")
-    return 0
+        return _run_sql(db, text, tables)
+    return _run_ask(db, text, tables, args.model, args.quiet)
 
 
 if __name__ == "__main__":

@@ -83,3 +83,11 @@ def test_only_the_examples_can_be_downloaded(client):
 
 def test_binary_values_are_sent_as_a_note():
     assert web.cell(b"\x00\xff\x10") == "<3 bytes>" and web.cell("text") == "text" and web.cell(4.5) == 4.5
+
+
+def test_two_uploads_with_the_same_name_are_both_read(client, monkeypatch):
+    monkeypatch.setattr(web, "model", FakeModel(reply("SELECT 1")))
+    files = [("files", ("hours.csv", b"Team,Hours\nDesign,12\n", "text/csv")),
+             ("files", ("hours.csv", b"Team,Hours\nOps,20\n", "text/csv"))]
+    r = client.post("/api/ask", data={"question": "Hours?"}, files=files)
+    assert r.status_code == 200 and len(r.json()["tables"]) == 2
