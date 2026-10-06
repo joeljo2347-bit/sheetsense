@@ -4,9 +4,8 @@ import pytest
 
 pytest.importorskip("multipart")
 web = pytest.importorskip("sheetsense.web")
-from fastapi.testclient import TestClient  # noqa: E402
-
 from conftest import FakeModel  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 
 def reply(sql):

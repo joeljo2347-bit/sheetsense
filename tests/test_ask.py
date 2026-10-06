@@ -1,8 +1,8 @@
 import json
 
 import pytest
-
 from conftest import FakeModel
+
 from sheetsense.ask import CouldNotAnswer, ask, parse
 from sheetsense.cli import main, table
 from sheetsense.tables import load, open_db

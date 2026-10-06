@@ -28,3 +28,13 @@ jobs:
           docker run -d -p 8000:8000 --name web sheetsense
           for i in $(seq 1 30); do curl -sf localhost:8000/healthz && exit 0; sleep 1; done
           docker logs web; exit 1
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install ruff mypy -e ".[dev,web]"
+      - run: ruff check .
+      - run: mypy src

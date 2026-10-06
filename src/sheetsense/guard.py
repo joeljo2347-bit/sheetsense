@@ -68,8 +68,9 @@ def run(db: sqlite3.Connection, sql: str, limit: int = 500, seconds: float = 10.
     deadline = time.monotonic() + seconds
     db.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 10_000)
     db.execute("PRAGMA query_only = ON")
-    if hasattr(db, "setlimit"):  # Python 3.11+: cap any single value at 10 MB
-        db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 10_000_000)
+    setlimit = getattr(db, "setlimit", None)  # Python 3.11+: cap any single value at 10 MB
+    if setlimit is not None:
+        setlimit(getattr(sqlite3, "SQLITE_LIMIT_LENGTH"), 10_000_000)  # noqa: B009 (not in 3.9's stubs)
     try:
         cur = db.execute(sql)
         rows = cur.fetchmany(limit + 1)

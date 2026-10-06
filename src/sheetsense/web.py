@@ -37,7 +37,8 @@ MAX_WAITING = 6
 SHOWN_ROWS = 200
 
 EXAMPLE_FILES = {
-    "sales_2025.xlsx": "Orders 2025 for Lumen Supply Co., a made-up office-supply company: 289 orders, a title row, money typed as text, a Total row.",
+    "sales_2025.xlsx": ("Orders 2025 for Lumen Supply Co., a made-up office-supply company: "
+                        "289 orders, a title row, money typed as text, a Total row."),
     "webinar_attendance.csv": "Who signed up for the company's webinars, and whether they came.",
 }
 SUGGESTIONS = [

@@ -3,6 +3,8 @@
 [![tests](https://github.com/joeljo2347-bit/sheetsense/actions/workflows/tests.yml/badge.svg)](https://github.com/joeljo2347-bit/sheetsense/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
 
 Ask your spreadsheets questions in plain English and get **exact** answers, on your own computer.
 
