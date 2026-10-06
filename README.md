@@ -6,6 +6,8 @@
 
 Ask your spreadsheets questions in plain English and get **exact** answers, on your own computer.
 
+![sheetsense answering a question across two files in the browser](docs/web-demo.png)
+
 ```console
 $ sheetsense ask examples/sales_2025.xlsx examples/webinar_attendance.csv \
     "Which customers attended a webinar but never placed an order?"
@@ -92,6 +94,12 @@ with the query behind it.
 ```bash
 pip install -e ".[web]"
 uvicorn sheetsense.web:app --port 8000      # then open http://localhost:8000
+```
+
+Or in Docker, with Ollama running on the host:
+
+```bash
+docker build -t sheetsense . && docker run -p 8000:8000 sheetsense
 ```
 
 It's built to be put online: uploads are size-checked and read in memory, then discarded; one

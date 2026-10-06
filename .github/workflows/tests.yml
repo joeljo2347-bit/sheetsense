@@ -18,3 +18,13 @@ jobs:
       - run: pip install -e ".[dev,web]"
       - run: pytest -q
       - run: sheetsense describe examples/sales_2025.xlsx examples/webinar_attendance.csv
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t sheetsense .
+      - name: Web app starts and answers /healthz
+        run: |
+          docker run -d -p 8000:8000 --name web sheetsense
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && exit 0; sleep 1; done
+          docker logs web; exit 1
