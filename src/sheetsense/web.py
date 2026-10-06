@@ -126,7 +126,6 @@ def examples() -> dict:
         "files": [{"name": n, "about": a} for n, a in EXAMPLE_FILES.items()],
         "tables": summary(tables),
         "suggestions": SUGGESTIONS,
-        "model": model.model,
     }
 
 

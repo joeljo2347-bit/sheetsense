@@ -8,7 +8,8 @@
 
 Ask your spreadsheets questions in plain English and get **exact** answers, on your own computer.
 
-![sheetsense answering a question across two files in the browser](docs/web-demo.png)
+![sheetsense in the browser: a question typed, the answer computed by SQLite, and the query it used](docs/web-demo.gif)
+<sub>A real run (the ~9 s wait for the model is shortened). The totals match the spreadsheet to the cent, and the SQL is shown so anyone can check it.</sub>
 
 ```console
 $ sheetsense ask examples/sales_2025.xlsx examples/webinar_attendance.csv \
@@ -45,7 +46,7 @@ names and writes one SQL query; SQLite runs it and returns the figures. If the q
 makes a mistake sheetsense knows to look for, it goes back to the model with the reason, up to
 three times. The SQL is printed with every answer so you can check it.
 
-Everything runs on your machine through [Ollama](https://ollama.com): no API keys, nothing uploaded.
+Everything runs on your machine with a self-hosted open-weight model: no API keys, nothing uploaded.
 
 ```mermaid
 flowchart LR
@@ -79,7 +80,7 @@ drops the first digit of every amount. sheetsense refuses that query and tells t
 
 ```bash
 pip install git+https://github.com/joeljo2347-bit/sheetsense
-ollama pull gpt-oss:20b        # or any model that writes SQL well
+# plus a local model server with a model that writes SQL well (see model.py)
 ```
 
 Python 3.9+ and one dependency (`openpyxl`).
@@ -93,7 +94,7 @@ sheetsense ask sales.xlsx leads.csv "Which leads never bought?"   # across files
 sheetsense sql sales.xlsx "SELECT region, SUM(amount) FROM sales GROUP BY region"
 ```
 
-`--model` picks another Ollama model (or set `SHEETSENSE_MODEL`); `--quiet` prints only the answer.
+`--model` picks another model (or set `SHEETSENSE_MODEL`); `--quiet` prints only the answer.
 
 ## Web demo
 
@@ -105,7 +106,7 @@ pip install -e ".[web]"
 uvicorn sheetsense.web:app --port 8000      # then open http://localhost:8000
 ```
 
-Or in Docker, with Ollama running on the host:
+Or in Docker, with the model server running on the host:
 
 ```bash
 docker build -t sheetsense .
@@ -113,11 +114,11 @@ docker run -p 8000:8000 sheetsense                       # Docker Desktop (Mac, 
 docker run -p 8000:8000 --add-host=host.docker.internal:host-gateway sheetsense   # Linux
 ```
 
-On Linux, start Ollama with `OLLAMA_HOST=0.0.0.0` so the container can reach it.
+On Linux, make the model server listen on all addresses so the container can reach it.
 
 It's built to be put online: uploads are size-checked, used only for the question and deleted right after; one
 question runs on the model at a time; each visitor gets 15 questions per 10 minutes. `deploy/setup.sh`
-sets it up on an Ubuntu server with Ollama, a systemd service and HTTPS through Caddy.
+sets it up on an Ubuntu server with a model server, a systemd service and HTTPS through Caddy.
 
 ## Accuracy
 
@@ -126,8 +127,8 @@ hand-written query: totals, filters, month-by-month, top-N, a join across files,
 
 | Model | Correct | Time per question |
 | --- | --- | --- |
-| gpt-oss:20b | 24/24 | 2.9 s |
-| qwen3:8b | 22/24 | 17.4 s |
+| Model A (20B, open-weight) | 24/24 | 2.9 s |
+| Model B (8B, open-weight) | 22/24 | 17.4 s |
 
 Three runs of each question, on an Apple M5 Pro. Eight questions on two files is a small test;
 it shows the approach works, not that it never fails. The SQL is always printed so you can check it.
@@ -140,7 +141,7 @@ pip install -U pip                   # macOS's built-in pip is too old for -e in
 pip install -e ".[dev]"
 pytest                               # no model needed: tests use a stand-in
 python3 scripts/make_examples.py     # rebuild the example files
-python3 scripts/accuracy.py          # needs Ollama
+python3 scripts/accuracy.py          # needs the model server
 ```
 
 ```
@@ -148,7 +149,7 @@ src/sheetsense/
   tables.py   spreadsheets → clean SQLite tables, and the schema the model sees
   guard.py    what may run (one SELECT, read-only, time-limited) and slips worth catching
   ask.py      question → SQL → answer, sending failures back to the model
-  model.py    the Ollama client and the instructions
+  model.py    the model client and the instructions
   cli.py      describe / ask / sql
 ```
 
