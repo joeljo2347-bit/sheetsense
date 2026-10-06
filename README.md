@@ -25,6 +25,13 @@ Marlow Accounting
 Oakhaven Vet
 ```
 
+## Where this comes from
+
+At AMII, a dental implant company, I build and run Noah, the company's AI assistant and ordering
+platform. One problem I solved there was getting exact answers and reports from the accounting
+team's spreadsheets. This repo rebuilds the core idea from scratch on made-up data; AMII's code
+and data stay private.
+
 ## Why
 
 Language models understand questions well and do arithmetic badly. Paste a few hundred rows into
