@@ -79,3 +79,7 @@ def test_only_the_examples_can_be_downloaded(client):
     assert client.get("/examples/sales_2025.xlsx").status_code == 200
     assert client.get("/examples/..%2Fpyproject.toml").status_code == 404
     assert client.get("/docs").status_code == 404
+
+
+def test_binary_values_are_sent_as_a_note():
+    assert web.cell(b"\x00\xff\x10") == "<3 bytes>" and web.cell("text") == "text" and web.cell(4.5) == 4.5

@@ -14,19 +14,30 @@ WRITES = re.compile(
     r"\bupdate\s+\w+\s+set\b|\bdelete\s+from\b|\b(drop|alter)\s+table\b|\bcreate\s+(table|view|index|trigger)\b",
     re.IGNORECASE,
 )
+# Functions that can build huge values in a fraction of a second, before the time limit notices.
+HEAVY = re.compile(r"\b(zeroblob|randomblob)\s*\(", re.IGNORECASE)
+WIDE_FORMAT = re.compile(r"\b(printf|format)\s*\(\s*'[^']*\*", re.IGNORECASE)
+# Quoted text and comments, matched left to right in one pass, so a quote can't hide a comment
+# marker ('/*') and a comment can't hide a quote.
+_TEXT_OR_COMMENT = re.compile(r"'(?:[^']|'')*'|--[^\n]*|/\*.*?(?:\*/|$)", re.DOTALL)
 TEXT_SURGERY = re.compile(r"\b(substr|substring|ltrim|rtrim|trim)\s*\(\s*(?:\w+\.)?[\"`\[]?(\w+)[\"`\]]?\s*[,)]", re.IGNORECASE)
 
 
 def refuse(sql: str) -> Optional[str]:
     """Why this SQL may not run, or None. One SELECT (or WITH ... SELECT), nothing that writes."""
-    s = re.sub(r"--[^\n]*|/\*.*?\*/", " ", sql, flags=re.DOTALL).strip().rstrip(";").strip()
-    s = re.sub(r"'(?:[^']|'')*'", "''", s)  # text in quotes ('a;b', 'delete me') is data, not SQL
+    if WIDE_FORMAT.search(sql):
+        return "printf/format with a * width can build huge text; use a fixed width."
+    # Text in quotes ('a;b', 'delete me') is data, not SQL; comments are dropped.
+    s = _TEXT_OR_COMMENT.sub(lambda m: "''" if m.group(0).startswith("'") else " ", sql)
+    s = s.strip().rstrip(";").strip()
     if not re.match(r"^(select|with)\b", s, re.IGNORECASE):
         return "Only a SELECT query (or WITH ... SELECT) can run."
     if ";" in s:
         return "One query at a time."
     if WRITES.search(s):
         return "The query can only read the tables."
+    if HEAVY.search(s):
+        return "zeroblob and randomblob aren't needed to answer questions about a sheet."
     return None
 
 
@@ -57,6 +68,8 @@ def run(db: sqlite3.Connection, sql: str, limit: int = 500, seconds: float = 10.
     deadline = time.monotonic() + seconds
     db.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 10_000)
     db.execute("PRAGMA query_only = ON")
+    if hasattr(db, "setlimit"):  # Python 3.11+: cap any single value at 10 MB
+        db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 10_000_000)
     try:
         cur = db.execute(sql)
         rows = cur.fetchmany(limit + 1)

@@ -11,6 +11,9 @@ from sheetsense.tables import load, open_db
     "with t as (select 1) select * from t",
     "SELECT REPLACE(customer, 'Blue', 'Navy') FROM orders",  # a function, not a statement
     "SELECT 1; -- trailing comment",
+    "SELECT printf('%.2f', 3.14159)",  # fixed widths are fine
+    "SELECT 'it''s /* not a comment */ text'",
+    "SELECT 1 /* unclosed; DELETE FROM orders",  # SQLite reads the rest as a comment
 ])
 def test_reads_may_run(sql):
     assert guard.refuse(sql) is None
@@ -23,6 +26,10 @@ def test_reads_may_run(sql):
     "PRAGMA writable_schema = 1",
     "ATTACH DATABASE 'x.db' AS x",
     "INSERT INTO orders VALUES (1)",
+    "SELECT '/*'; DELETE FROM orders; --*/'",  # a quote hiding a comment marker
+    "SELECT zeroblob(500000000)",
+    "SELECT randomblob(4)",
+    "SELECT printf('%.*c', 400000000, 'x')",
 ])
 def test_writes_never_run(sql):
     assert guard.refuse(sql) is not None
@@ -47,3 +54,9 @@ def test_a_runaway_query_is_stopped():
     db = open_db()
     with pytest.raises(sqlite3.OperationalError):
         guard.run(db, "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) SELECT COUNT(*) FROM n", seconds=0.2)
+
+
+def test_a_second_statement_is_an_error_not_a_crash():
+    db = open_db()
+    with pytest.raises((sqlite3.Error, sqlite3.Warning)):
+        guard.run(db, "SELECT 1; SELECT 2")

@@ -3,7 +3,7 @@
     pip install -e ".[web]"
     uvicorn sheetsense.web:app --port 8000
 
-Built to sit on the public internet: uploads are size-checked and read in memory, one question
+Built to sit on the public internet: uploads are size-checked, kept in a temporary folder only while the question runs, one question
 runs on the model at a time, and each visitor gets a limited number of questions.
 """
 
@@ -71,7 +71,15 @@ def over_limit(who: str) -> Optional[int]:
     if len(times) >= PER_VISITOR:
         return int(WINDOW - (now - times[0])) + 1
     times.append(now)
+    if len(asked) > 10_000:  # forget visitors whose window has passed
+        for key in [k for k, v in asked.items() if not v or now - v[-1] > WINDOW]:
+            del asked[key]
     return None
+
+
+def cell(value):
+    """Rows go out as JSON: binary values become a short note."""
+    return f"<{len(value)} bytes>" if isinstance(value, (bytes, bytearray, memoryview)) else value
 
 
 def fail(status: int, message: str, **extra) -> JSONResponse:
@@ -190,7 +198,7 @@ async def api_ask(
         "sql": answer.sql,
         "note": answer.note,
         "columns": result.columns,
-        "rows": [list(r) for r in result.rows[:SHOWN_ROWS]],
+        "rows": [[cell(v) for v in r] for r in result.rows[:SHOWN_ROWS]],
         "total_rows": len(result.rows),
         "cut": result.cut or len(result.rows) > SHOWN_ROWS,
         "retries": len(answer.attempts),

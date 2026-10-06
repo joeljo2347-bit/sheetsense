@@ -106,10 +106,14 @@ uvicorn sheetsense.web:app --port 8000      # then open http://localhost:8000
 Or in Docker, with Ollama running on the host:
 
 ```bash
-docker build -t sheetsense . && docker run -p 8000:8000 sheetsense
+docker build -t sheetsense .
+docker run -p 8000:8000 sheetsense                       # Docker Desktop (Mac, Windows)
+docker run -p 8000:8000 --add-host=host.docker.internal:host-gateway sheetsense   # Linux
 ```
 
-It's built to be put online: uploads are size-checked and read in memory, then discarded; one
+On Linux, start Ollama with `OLLAMA_HOST=0.0.0.0` so the container can reach it.
+
+It's built to be put online: uploads are size-checked, used only for the question and deleted right after; one
 question runs on the model at a time; each visitor gets 15 questions per 10 minutes. `deploy/setup.sh`
 sets it up on an Ubuntu server with Ollama, a systemd service and HTTPS through Caddy.
 
@@ -130,6 +134,7 @@ it shows the approach works, not that it never fails. The SQL is always printed 
 
 ```bash
 git clone https://github.com/joeljo2347-bit/sheetsense && cd sheetsense
+pip install -U pip                   # macOS's built-in pip is too old for -e installs
 pip install -e ".[dev]"
 pytest                               # no model needed: tests use a stand-in
 python3 scripts/make_examples.py     # rebuild the example files

@@ -59,7 +59,7 @@ def ask(question: str, db: sqlite3.Connection, tables: Sequence[Table], model: M
         if why is None:
             try:
                 return Answer(question, sql, note, guard.run(db, sql), attempts)
-            except sqlite3.Error as e:
+            except (sqlite3.Error, sqlite3.Warning) as e:  # on 3.9, "one statement" is a Warning
                 why = f"SQLite: {e}"
         attempts.append(why)
         messages += [
