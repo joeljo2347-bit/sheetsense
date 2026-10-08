@@ -143,7 +143,8 @@ hand-written query: totals, filters, month-by-month, top-N, a join across files,
 | Model A (20B, open-weight) | 24/24 | 2.9 s |
 | Model B (8B, open-weight) | 22/24 | 17.4 s |
 
-Three runs of each question, on an Apple M5 Pro. Eight questions on two files is a small test;
+Three runs of each question (`python3 scripts/accuracy.py --model <model> --runs 3`; the script
+defaults to one run), on an Apple M5 Pro. Eight questions on two files is a small test;
 it shows the approach works, not that it never fails. The SQL is always printed so you can check it.
 
 ## Develop
@@ -171,7 +172,8 @@ src/sheetsense/
 - One query per question. Questions that need several steps ("compare this month to the average
   of the last three, then explain") work only when they fit in one SELECT.
 - The example data is made up. Your sheets will have surprises; `describe` shows how they loaded.
-- Up to 500 result rows are returned per question.
+- A query returns at most 500 rows, and says so when there were more. Of those, the terminal
+  prints the first 50 and the web demo shows the first 200.
 - Numbers written the European way (`1 200,50`) are read as text.
 - Old `.xls` files aren't supported; save them as `.xlsx` first.
 
