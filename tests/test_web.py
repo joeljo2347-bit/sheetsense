@@ -58,6 +58,17 @@ def test_each_visitor_gets_a_limited_number_of_questions(client, monkeypatch):
     assert codes == [200, 200, 429]
 
 
+def test_refused_requests_do_not_use_up_questions(client, monkeypatch):
+    monkeypatch.setattr(web, "PER_VISITOR", 1)
+    monkeypatch.setattr(web, "model", FakeModel(reply("SELECT 1")))
+    bad = client.post("/api/ask", data={"question": "?"}, files={"files": ("notes.txt", b"hi", "text/plain")})
+    monkeypatch.setattr(web, "waiting", web.MAX_WAITING)
+    busy = client.post("/api/ask", data={"question": "?", "examples": "sales_2025.xlsx"})
+    monkeypatch.setattr(web, "waiting", 0)
+    codes = [client.post("/api/ask", data={"question": "?", "examples": "sales_2025.xlsx"}).status_code for _ in range(2)]
+    assert (bad.status_code, busy.status_code, codes) == (400, 503, [200, 429])
+
+
 def test_a_full_queue_turns_people_away_politely(client, monkeypatch):
     monkeypatch.setattr(web, "waiting", web.MAX_WAITING)
     r = client.post("/api/ask", data={"question": "?", "examples": "sales_2025.xlsx"})

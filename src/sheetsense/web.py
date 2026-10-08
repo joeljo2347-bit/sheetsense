@@ -64,18 +64,23 @@ def visitor(request: Request) -> str:
 
 
 def over_limit(who: str) -> Optional[int]:
-    """Seconds until this visitor may ask again, or None."""
+    """Seconds until this visitor may ask again, or None. Only looks; count() spends a question."""
     now = time.monotonic()
     times = asked[who]
     while times and now - times[0] > WINDOW:
         times.popleft()
     if len(times) >= PER_VISITOR:
         return int(WINDOW - (now - times[0])) + 1
-    times.append(now)
+    return None
+
+
+def count(who: str) -> None:
+    """Spend one of this visitor's questions, once the request has been accepted."""
+    now = time.monotonic()
+    asked[who].append(now)
     if len(asked) > 10_000:  # forget visitors whose window has passed
         for key in [k for k, v in asked.items() if not v or now - v[-1] > WINDOW]:
             del asked[key]
-    return None
 
 
 def cell(value):
@@ -162,11 +167,10 @@ async def api_ask(
         if not tables:
             db.close()
             return fail(400, "No sheet has a row of headings over its data.")
+        count(visitor(request))  # accepted: only now does it use up one of the visitor's questions
         started = time.monotonic()
         answer = await _ask_in_turn(question, db, tables)
-    if isinstance(answer, JSONResponse):
-        return answer
-    return _payload(answer, tables, time.monotonic() - started)
+    return answer if isinstance(answer, JSONResponse) else _payload(answer, tables, time.monotonic() - started)
 
 
 def _refuse_request(request: Request, question: str, files, chosen) -> Optional[JSONResponse]:
