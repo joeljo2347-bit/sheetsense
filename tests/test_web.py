@@ -1,3 +1,4 @@
+import ipaddress
 import json
 
 import pytest
@@ -5,6 +6,7 @@ import pytest
 pytest.importorskip("multipart")
 web = pytest.importorskip("sheetsense.web")
 from conftest import FakeModel  # noqa: E402
+from fastapi import Request  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 
@@ -67,6 +69,25 @@ def test_refused_requests_do_not_use_up_questions(client, monkeypatch):
     monkeypatch.setattr(web, "waiting", 0)
     codes = [client.post("/api/ask", data={"question": "?", "examples": "sales_2025.xlsx"}).status_code for _ in range(2)]
     assert (bad.status_code, busy.status_code, codes) == (400, 503, [200, 429])
+
+
+def request_from(peer, forwarded=None):
+    headers = [(b"x-forwarded-for", forwarded.encode())] if forwarded else []
+    return Request({"type": "http", "client": (peer, 5000), "headers": headers})
+
+
+def test_the_forwarded_address_is_ignored_unless_its_proxy_is_trusted(monkeypatch):
+    monkeypatch.setattr(web, "TRUSTED_PROXIES", [])
+    assert web.visitor(request_from("172.17.0.1", "203.0.113.7")) == "172.17.0.1"
+    assert web.visitor(request_from("127.0.0.1", "203.0.113.7")) == "127.0.0.1"
+
+
+def test_a_trusted_proxy_gives_each_visitor_their_own_address(monkeypatch):
+    monkeypatch.setattr(web, "TRUSTED_PROXIES", [ipaddress.ip_network("172.17.0.0/16")])
+    assert web.visitor(request_from("172.17.0.1", "203.0.113.7")) == "203.0.113.7"
+    assert web.visitor(request_from("172.17.0.1", "1.2.3.4, 203.0.113.7")) == "203.0.113.7"  # the left end is the client's say
+    assert web.visitor(request_from("172.17.0.1", "203.0.113.7, 172.17.0.5")) == "203.0.113.7"
+    assert web.visitor(request_from("198.51.100.9", "203.0.113.7")) == "198.51.100.9"  # not from the proxy
 
 
 def test_a_full_queue_turns_people_away_politely(client, monkeypatch):

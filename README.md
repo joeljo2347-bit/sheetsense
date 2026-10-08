@@ -116,6 +116,19 @@ docker run -p 8000:8000 --add-host=host.docker.internal:host-gateway sheetsense 
 
 On Linux, make the model server listen on all addresses so the container can reach it.
 
+Inside the container every request comes from Docker's bridge gateway, so on its own every visitor shares
+one question limit. To put it online, run it behind a reverse proxy on the host that sets `X-Forwarded-For`,
+publish the port to the host only, and name the proxy's address as the container sees it:
+
+```bash
+docker run -p 127.0.0.1:8000:8000 --add-host=host.docker.internal:host-gateway \
+  -e SHEETSENSE_TRUSTED_PROXIES=172.17.0.1 sheetsense
+```
+
+`SHEETSENSE_TRUSTED_PROXIES` takes a comma-separated list of addresses or networks (e.g. `172.17.0.0/16`).
+It is empty by default, and then `X-Forwarded-For` is ignored: anyone can send that header, so believing it
+from any other address would let visitors pick their own identity and get round the limit.
+
 It's built to be put online: uploads are size-checked, used only for the question and deleted right after; one
 question runs on the model at a time; each visitor gets 15 questions per 10 minutes. `deploy/setup.sh`
 sets it up on an Ubuntu server with a model server, a systemd service and HTTPS through Caddy.

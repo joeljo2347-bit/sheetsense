@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import ipaddress
 import os
 import tempfile
 import time
@@ -35,6 +36,10 @@ MAX_QUESTION = 300
 PER_VISITOR, WINDOW = int(os.environ.get("SHEETSENSE_RATE", "15")), 600  # questions per 10 minutes
 MAX_WAITING = 6
 SHOWN_ROWS = 200
+# Addresses or networks of reverse proxies whose X-Forwarded-For is believed, e.g. "172.17.0.1" for Docker's bridge gateway.
+# Empty by default: anyone can send that header, so trusting it from an unknown peer would let visitors pick their own address.
+TRUSTED_PROXIES = [ipaddress.ip_network(a.strip(), strict=False)
+                   for a in os.environ.get("SHEETSENSE_TRUSTED_PROXIES", "").split(",") if a.strip()]
 
 EXAMPLE_FILES = {
     "sales_2025.xlsx": ("Orders 2025 for Lumen Supply Co., a made-up office-supply company: "
@@ -56,11 +61,25 @@ waiting = 0
 asked: Dict[str, Deque[float]] = defaultdict(deque)
 
 
+def trusted(address: str) -> bool:
+    """Whether this address is one of the configured reverse proxies."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return any(ip in net for net in TRUSTED_PROXIES)
+
+
 def visitor(request: Request) -> str:
-    """The visitor's address. Behind the local proxy, the one it forwards."""
+    """The visitor's address. From a trusted proxy, the nearest forwarded address that isn't another trusted proxy."""
     peer = request.client.host if request.client else "?"
     forwarded = request.headers.get("x-forwarded-for")
-    return forwarded.split(",")[0].strip() if forwarded and peer in ("127.0.0.1", "::1") else peer
+    if not forwarded or not trusted(peer):
+        return peer
+    hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+    while hops and trusted(hops[-1]):  # read from the right: the left end is whatever the client sent
+        hops.pop()
+    return hops[-1] if hops else peer
 
 
 def over_limit(who: str) -> Optional[int]:
