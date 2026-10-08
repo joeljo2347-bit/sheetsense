@@ -3,7 +3,7 @@ import json
 import pytest
 from conftest import FakeModel
 
-from sheetsense.ask import CouldNotAnswer, ask, parse
+from sheetsense.ask import CouldNotAnswer, NotInTheSheets, ask, parse
 from sheetsense.cli import main, table
 from sheetsense.tables import load, open_db
 
@@ -46,6 +46,32 @@ def test_it_gives_up_after_three_tries(messy_xlsx):
     with pytest.raises(CouldNotAnswer) as e:
         ask("?", db, tables, model)
     assert len(e.value.attempts) == 3
+
+
+def test_a_question_the_sheets_cant_answer_stops_at_once(messy_xlsx):
+    db = open_db()
+    tables = load(db, [messy_xlsx])
+    model = FakeModel(reply("", "The tables hold orders, not weather."))
+    with pytest.raises(NotInTheSheets) as e:
+        ask("What is the weather in Paris tomorrow?", db, tables, model)
+    assert len(model.seen) == 1  # asked once, not three times
+    assert str(e.value) == "Can't answer from these sheets: The tables hold orders, not weather."
+
+
+def test_a_reply_with_neither_sql_nor_note_is_still_retried(messy_xlsx):
+    db = open_db()
+    tables = load(db, [messy_xlsx])
+    model = FakeModel(reply("", ""), reply("SELECT COUNT(*) FROM orders"))
+    answer = ask("How many?", db, tables, model)
+    assert answer.result.rows == [(4,)] and answer.attempts == ["The reply had no SQL."]
+
+
+def test_the_ask_command_says_when_the_sheets_cant_answer(messy_xlsx, monkeypatch, capsys):
+    from sheetsense import cli
+
+    monkeypatch.setattr(cli, "Ollama", lambda model: FakeModel(reply("", "No weather data here.")))
+    assert main(["ask", str(messy_xlsx), "Weather in Paris tomorrow?"]) == 1
+    assert capsys.readouterr().out.strip() == "Can't answer from these sheets: No weather data here."
 
 
 def test_a_sql_block_is_accepted_when_the_reply_isnt_json():

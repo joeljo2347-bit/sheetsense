@@ -17,6 +17,25 @@ def test_codes_keep_their_leading_zeros(tmp_path):
     assert [r[0] for r in db.execute("SELECT zip FROM customers")] == ["02134", "10001", "00501"]
 
 
+@pytest.mark.parametrize("text", [
+    "Customer\nBlue Harbor\nCedar Point\n",
+    "Customer list\n\nCustomer\nBlue Harbor\nCedar Point\n",  # a title over a blank row is passed over
+])
+def test_a_one_column_sheet_loads(tmp_path, text):
+    path = tmp_path / "customers.csv"
+    path.write_text(text)
+    db = open_db()
+    [t] = load(db, [path])
+    assert [c.heading for c in t.columns] == ["Customer"] and t.rows == 2
+    assert [r[0] for r in db.execute("SELECT customer FROM customers")] == ["Blue Harbor", "Cedar Point"]
+
+
+def test_a_one_column_list_of_numbers_has_no_heading(tmp_path):
+    path = tmp_path / "numbers.csv"
+    path.write_text("1\n2\n3\n")
+    assert load(open_db(), [path]) == []
+
+
 def test_accented_headings_keep_their_letters(tmp_path):
     path = tmp_path / "écoles.csv"
     path.write_bytes("﻿Namé,Élèves\nCafé,12\nÉcole,30\n".encode())

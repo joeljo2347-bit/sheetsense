@@ -126,8 +126,19 @@ docker run -p 127.0.0.1:8000:8000 --add-host=host.docker.internal:host-gateway \
 ```
 
 `SHEETSENSE_TRUSTED_PROXIES` takes a comma-separated list of addresses or networks (e.g. `172.17.0.0/16`).
-It is empty by default, and then `X-Forwarded-For` is ignored: anyone can send that header, so believing it
+It is empty by default, and then the app ignores `X-Forwarded-For`: anyone can send that header, so believing it
 from any other address would let visitors pick their own identity and get round the limit.
+
+uvicorn has its own say first: by default it believes `X-Forwarded-For` from 127.0.0.1 and hands the app the
+address in it. That only matters for requests made on the same machine, but when you run it directly where
+others can reach it, turn that off so the app sees the real peer (the Docker image already does):
+
+```bash
+uvicorn sheetsense.web:app --host 0.0.0.0 --port 8000 --no-proxy-headers
+```
+
+`deploy/setup.sh` relies on the opposite: Caddy on the same machine sets the header, and uvicorn is told to
+believe it from 127.0.0.1 only.
 
 It's built to be put online: uploads are size-checked, used only for the question and deleted right after; one
 question runs on the model at a time; each visitor gets 15 questions per 10 minutes. `deploy/setup.sh`
@@ -176,6 +187,9 @@ src/sheetsense/
   prints the first 50 and the web demo shows the first 200.
 - Numbers written the European way (`1 200,50`) are read as text.
 - Old `.xls` files aren't supported; save them as `.xlsx` first.
+- A one-column sheet takes its first text cell with data right under it as the heading, so a title
+  sitting directly on top of the heading (no blank row between) is read as the heading.
+- A question the sheets can't answer (the weather, say) gets a one-line reply saying why, not a query.
 
 ## License
 

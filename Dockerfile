@@ -8,4 +8,4 @@ ENV OLLAMA_HOST=http://host.docker.internal:11434 \
     SHEETSENSE_EXAMPLES=/app/examples
 EXPOSE 8000
 USER nobody
-CMD ["uvicorn", "sheetsense.web:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "sheetsense.web:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]

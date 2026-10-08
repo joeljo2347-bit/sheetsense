@@ -30,6 +30,14 @@ class CouldNotAnswer(Exception):
         self.attempts = attempts
 
 
+class NotInTheSheets(Exception):
+    """The model wrote no SQL and said why: the sheets don't hold the answer. Asking again won't help."""
+
+    def __init__(self, note: str):
+        super().__init__(f"Can't answer from these sheets: {note}")
+        self.note = note
+
+
 def parse(reply: str) -> tuple[str, str]:
     """The SQL and note from the model's reply: JSON, or failing that a ```sql block."""
     try:
@@ -55,6 +63,8 @@ def ask(question: str, db: sqlite3.Connection, tables: Sequence[Table], model: M
     for _ in range(MAX_TRIES):
         reply = model.complete(messages)
         sql, note = parse(reply)
+        if not sql and note:
+            raise NotInTheSheets(note)
         why = problem(sql, tables)
         if why is None:
             try:

@@ -95,6 +95,23 @@ def find_heading_row(rows: Sequence[list]) -> Optional[int]:
         texts = [c for c in cells if isinstance(c, str) and as_number(c) is None]
         if len(cells) >= 2 and len(texts) >= max(2, int(0.8 * len(cells))):
             return i
+    return single_column_heading(rows)
+
+
+def single_column_heading(rows: Sequence[list]) -> Optional[int]:
+    """A list one column wide: its first text cell with data right under it. A title over a blank row is passed over."""
+    used = {j for r in rows for j, c in enumerate(r) if c not in (None, "")}
+    if len(used) != 1:
+        return None
+    j = used.pop()
+    column = [r[j] if j < len(r) else None for r in rows[:11]]
+    for i, value in enumerate(column[:10]):
+        if value in (None, ""):
+            continue
+        if not isinstance(value, str) or as_number(value) is not None:
+            return None  # data before any heading
+        if i + 1 < len(column) and column[i + 1] not in (None, ""):
+            return i
     return None
 
 

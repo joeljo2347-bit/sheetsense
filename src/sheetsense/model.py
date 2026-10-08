@@ -30,6 +30,7 @@ Rules:
 - Dates are text "yyyy-mm-dd": use substr(date,1,7) for a month, strftime for more.
 - Text matches ignore case. For "in one list but not the other", use NOT IN or LEFT JOIN ... IS NULL.
 - Name result columns plainly (AS "Total sales").
+- If the tables can't answer the question, leave "sql" empty and say why in "note".
 
 Reply with JSON only: {"sql": "...", "note": "one short sentence on how the query answers the question"}"""
 

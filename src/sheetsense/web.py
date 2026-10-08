@@ -25,7 +25,7 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 from . import guard
-from .ask import CouldNotAnswer, ask
+from .ask import CouldNotAnswer, NotInTheSheets, ask
 from .model import DEFAULT_MODEL, Ollama
 from .tables import Table, describe, load, open_db
 
@@ -163,7 +163,7 @@ def download_example(name: str):
 @app.post("/api/ask")
 async def api_ask(
     request: Request,
-    question: str = Form(...),
+    question: str = Form(""),  # blank arrives as missing: answered below, not with a bare 422
     examples: str = Form(""),
     files: List[UploadFile] = File(default=[]),
 ):
@@ -189,7 +189,7 @@ async def api_ask(
         count(visitor(request))  # accepted: only now does it use up one of the visitor's questions
         started = time.monotonic()
         answer = await _ask_in_turn(question, db, tables)
-    return answer if isinstance(answer, JSONResponse) else _payload(answer, tables, time.monotonic() - started)
+    return _respond(answer, tables, time.monotonic() - started)
 
 
 def _refuse_request(request: Request, question: str, files, chosen) -> Optional[JSONResponse]:
@@ -233,6 +233,8 @@ async def _ask_in_turn(question: str, db, tables):
         async with turn:
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, ask, question, db, tables, model)
+    except NotInTheSheets as e:  # an answer of sorts: the sheets don't hold it
+        return e
     except CouldNotAnswer as e:
         return fail(422, "The model couldn't write a working query for that. Try rephrasing it.", attempts=e.attempts)
     except ConnectionError:
@@ -240,6 +242,15 @@ async def _ask_in_turn(question: str, db, tables):
     finally:
         waiting -= 1
         db.close()
+
+
+def _respond(answer, tables, seconds: float):
+    """The answer, a message that the sheets don't hold one, or the refusal already made."""
+    if isinstance(answer, JSONResponse):
+        return answer
+    if isinstance(answer, NotInTheSheets):
+        return {"cannot": str(answer), "note": answer.note, "seconds": round(seconds, 1), "tables": summary(tables)}
+    return _payload(answer, tables, seconds)
 
 
 def _payload(answer, tables, seconds: float) -> dict:

@@ -122,3 +122,18 @@ def test_two_uploads_with_the_same_name_are_both_read(client, monkeypatch):
              ("files", ("hours.csv", b"Team,Hours\nOps,20\n", "text/csv"))]
     r = client.post("/api/ask", data={"question": "Hours?"}, files=files)
     assert r.status_code == 200 and len(r.json()["tables"]) == 2
+
+
+def test_a_question_the_sheets_cant_answer_gets_a_plain_reply(client, monkeypatch):
+    model = FakeModel(json.dumps({"sql": "", "note": "The sheets hold sales, not weather."}))
+    monkeypatch.setattr(web, "model", model)
+    r = client.post("/api/ask", data={"question": "Weather in Paris tomorrow?", "examples": "sales_2025.xlsx"})
+    assert r.status_code == 200 and len(model.seen) == 1
+    assert r.json()["cannot"] == "Can't answer from these sheets: The sheets hold sales, not weather."
+
+
+@pytest.mark.parametrize("data", [{"question": ""}, {"question": "   "}, {}])
+def test_a_blank_question_gets_the_friendly_message(client, monkeypatch, data):
+    monkeypatch.setattr(web, "model", FakeModel())  # would fail if called
+    r = client.post("/api/ask", data={**data, "examples": "sales_2025.xlsx"})
+    assert r.status_code == 400 and r.json()["error"] == "Type a question first."

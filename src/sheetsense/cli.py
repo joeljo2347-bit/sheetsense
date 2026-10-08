@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import List, Sequence
 
 from . import __version__, guard
-from .ask import CouldNotAnswer, ask
+from .ask import CouldNotAnswer, NotInTheSheets, ask
 from .model import DEFAULT_MODEL, Ollama
 from .tables import describe, load, open_db
 
@@ -86,6 +86,9 @@ def _run_sql(db, text: str, tables) -> int:
 def _run_ask(db, text: str, tables, model: str, quiet: bool) -> int:
     try:
         answer = ask(text, db, tables, Ollama(model))
+    except NotInTheSheets as e:
+        print(e)
+        return 1
     except (ConnectionError, CouldNotAnswer) as e:
         sys.exit(f"sheetsense: {e}")
     if not quiet:

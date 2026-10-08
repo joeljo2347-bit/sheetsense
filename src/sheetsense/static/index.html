@@ -151,6 +151,15 @@ function status(text, error) {
   $("out").innerHTML = error ? `<div class="error">${esc(text)}</div>` : `<div class="status"><div class="spin"></div>${esc(text)}</div>`;
 }
 
+function cannot(r) {
+  $("out").innerHTML = `
+    <div class="answer">
+      <h3>${esc(r.cannot)}</h3>
+      <div class="meta">No query was run · ${r.seconds} s</div>
+    </div>`;
+  showTables(r.tables);
+}
+
 function render(r) {
   const numeric = r.columns.map((_, i) => r.rows.every((row) => row[i] === null || typeof row[i] === "number"));
   const head = r.columns.map((c, i) => `<th class="${numeric[i] ? "n" : ""}">${esc(c)}</th>`).join("");
@@ -183,6 +192,7 @@ async function ask(question) {
     const res = await fetch("/api/ask", { method: "POST", body });
     const data = await res.json().catch(() => ({ error: "The server sent an unexpected reply." }));
     if (!res.ok || data.error) status(data.error || `Something went wrong (${res.status}).`, true);
+    else if (data.cannot) cannot(data);
     else render(data);
   } catch {
     status("Couldn't reach the demo. Check your connection and try again.", true);
